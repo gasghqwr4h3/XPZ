@@ -146,7 +146,24 @@ def generate_html_template():
         function draw() {
             const val = document.getElementById('search').value;
             const match = val.match(/\\((STR_[A-Z0-9_]+)\\)/);
-            const tid = match ? match[1] : Object.keys(rawData).find(id => id === val || getTechLabel(id) === val) || currentTID;
+            let tid = currentTID;
+            
+            // Determine tech ID from search input or fallback to current
+            if (match) {
+                tid = match[1];
+            } else {
+                const found = Object.keys(rawData).find(id => 
+                    id === val || getTechLabel(id) === val
+                );
+                if (found) tid = found;
+            }
+            
+            // Fallback if tech not found in data
+            if (!rawData[tid]) {
+                console.warn("Tech not found:", tid, "falling back to start");
+                tid = "__START_TID__"; // Will be replaced by Python
+                if (!rawData[tid]) tid = Object.keys(rawData)[0];
+            }
             
             currentTID = tid;
             const depth = parseInt(document.getElementById('depthRange').value);
@@ -158,22 +175,36 @@ def generate_html_template():
                 if(seen.has(id)) continue;
                 seen.add(id);
 
-                nodes.push({ id: id, label: getTechLabel(id), shape: 'box', color: (id===tid?'#dc3545':'#fff'), font: {color:(id===tid?'#fff':'#000'), size:14} });
+                const isRoot = (id === tid);
+                nodes.push({ 
+                    id: id, 
+                    label: getTechLabel(id), 
+                    shape: 'box', 
+                    color: isRoot ? '#dc3545' : '#fff', 
+                    font: {color: isRoot ? '#fff' : '#000', size: 14},
+                    borderWidth: isRoot ? 3 : 1
+                });
                 
                 if(step < depth && rawData[id]) {
-                    const ds = rawData[id].deps;
+                    const ds = rawData[id].deps || [];
+                    
+                    // Find who unlocks this tech (OR logic) - SAFE CHECK
                     const unlockers = [];
-                    for(let k in rawData) if(rawData[k].unlocks.includes(id)) unlockers.push(k);
+                    for(let k in rawData) {
+                        if(rawData[k].unlocks && rawData[k].unlocks.includes(id)) {
+                            unlockers.push(k);
+                        }
+                    }
 
                     if (unlockers.length > 0) {
                         if(unlockers.length < hubLimit) unlockers.forEach(s => {
-                            edges.push({from:s, to:id, color: '#6f42c1'});
-                            queue.push([s, step+1]);
+                            edges.push({from:s, to:id, color: '#6f42c1', arrows: 'to'});
+                            if(!seen.has(s)) queue.push([s, step+1]);
                         });
                     } else {
                         if(ds.length < hubLimit) ds.forEach(d => { 
-                            edges.push({from:d, to:id, color: '#007bff'}); 
-                            queue.push([d, step+1]); 
+                            edges.push({from:d, to:id, color: '#007bff', arrows: 'to'}); 
+                            if(!seen.has(d)) queue.push([d, step+1]); 
                         });
                     }
                 }
@@ -182,7 +213,8 @@ def generate_html_template():
             network = new vis.Network(document.getElementById('mynetwork'), {nodes, edges}, {
                 layout: { hierarchical: { direction:'DU', nodeSpacing: 350, levelSeparation: 200, sortMethod:'directed' } },
                 physics: false,
-                edges: { arrows:'to', smooth: { type:'cubicBezier', forceDirection:'vertical', roundness:0.4 } }
+                edges: { arrows:'to', smooth: { type:'cubicBezier', forceDirection:'vertical', roundness:0.4 } },
+                interaction: { hover: true }
             });
             network.on("click", p => p.nodes[0] && showDetail(p.nodes[0]));
             network.on("doubleClick", p => p.nodes[0] && goToTech(p.nodes[0]));

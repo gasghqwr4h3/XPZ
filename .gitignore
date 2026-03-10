@@ -1,52 +1,5 @@
-```
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+(html_generator.py and test_viewer.html are source files, no build artifacts, dependencies, or temp files detected in changes)
 
-# Testing
-.coverage
-coverage/
-htmlcov/
-.noseids
-.pytest_cache/
+```python
 
-# Environment
-.env
-.env.local
-.env.*
-.venv/
-venv/
-ENV/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
 ```
