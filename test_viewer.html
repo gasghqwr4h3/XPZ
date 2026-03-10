@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>X-Piratez Tech Viewer v35</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { background: #f8f9fa; color: #212529; font-family: sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        #sidebar { width: 420px; background: #fff; border-right: 2px solid #343a40; padding: 20px; overflow-y: auto; z-index: 10; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
+        #mynetwork { flex-grow: 1; background: #eaebed; }
+        .ctrl-group { display: flex; align-items: center; justify-content: space-between; margin: 5px 0; background: #f1f3f5; padding: 5px; border-radius: 4px; }
+        .step-btn { width: 30px; height: 30px; cursor: pointer; border: 1px solid #ccc; background: #fff; font-weight: bold; }
+        input, select, button { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; }
+        .card { border: 1px solid #dee2e6; padding: 12px; margin-top: 12px; background: #fff; border-radius: 4px; }
+        .card-stats { display: flex; gap: 15px; margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 0.9rem; }
+        .stat-item { display: flex; flex-direction: column; }
+        .stat-label { color: #6c757d; font-size: 0.75rem; text-transform: uppercase; }
+        .stat-value { font-weight: bold; color: #212529; }
+        .stat-value.cost { color: #dc3545; }
+        .stat-value.points { color: #28a745; }
+        .ufo-desc { background: #fffbe6; padding: 10px; border-left: 4px solid #f1c40f; font-size: 0.85rem; white-space: pre-wrap; margin: 10px 0; }
+        .tech-link { color: #007bff; text-decoration: underline; cursor: pointer; display: block; margin: 3px 0; font-size: 0.9rem; }
+        #suggestions { position: absolute; background: white; border: 1px solid #ccc; width: 380px; z-index: 100; display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .suggest-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 0.85rem; }
+        .suggest-item:hover { background: #f1f3f5; }
+        .and-label { color: #007bff; font-weight: bold; }
+        .or-label { color: #6f42c1; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h2 id="ui-main-title">X-Piratez Viewer</h2>
+        <div style="display:flex; gap:5px;">
+            <select id="appLang" onchange="updateUI()"><option value="en">App: EN</option><option value="ru">App: RU</option></select>
+            <select id="gameLang" onchange="syncAndDraw()"><option value="en-US" selected>en-US</option><option value="ru" >ru</option></select>
+        </div>
+        <button id="backBtn" style="display:none; background:#e74c3c; color:white; font-weight:bold;" onclick="goBack()">← BACK</button>
+        <div style="position:relative;"><input type="text" id="search" placeholder="Search..." autocomplete="off"><div id="suggestions"></div></div>
+        
+        <label id="ui-label-depth">Depth: <span id="dv">3</span></label>
+        <div class="ctrl-group">
+            <button class="step-btn" onclick="adj('depthRange',-1)">-</button>
+            <input type="range" id="depthRange" min="1" max="25" value="3" oninput="dv.innerText=this.value" onchange="updateUI()" style="flex-grow:1; margin:0 10px;">
+            <button class="step-btn" onclick="adj('depthRange',1)">+</button>
+        </div>
+
+        <label id="ui-label-hub">Max List size: <span id="hv">5</span></label>
+        <div class="ctrl-group">
+            <button class="step-btn" onclick="adj('hubRange',-1)">-</button>
+            <input type="range" id="hubRange" min="2" max="150" value="5" oninput="hv.innerText=this.value" onchange="updateUI()" style="flex-grow:1; margin:0 10px;">
+            <button class="step-btn" onclick="adj('hubRange',1)">+</button>
+        </div>
+
+        <button id="ui-btn-rebuild" onclick="updateUI()" style="background:#343a40; color:white; font-weight:bold;">REBUILD GRAPH</button>
+        <div id="info"></div>
+    </div>
+    <div id="mynetwork"></div>
+
+    <script>
+        const rawData = {"STR_TEST1": {"deps": ["STR_TEST2"], "unlocks": ["STR_TEST3"], "disables": [], "cost": 50, "points": 200}, "STR_TEST2": {"deps": [], "unlocks": ["STR_TEST1"], "disables": [], "cost": 25, "points": -100}, "STR_TEST3": {"deps": ["STR_TEST1"], "unlocks": [], "disables": ["STR_TEST4"], "cost": 75, "points": 500}, "STR_TEST4": {"deps": [], "unlocks": [], "disables": [], "cost": 10, "points": 50}};
+        const gameLangs = {"en-US": [{"STR_TEST1": "Test Tech 1", "STR_TEST2": "Test Tech 2", "STR_TEST3": "Test Tech 3", "STR_TEST4": "Test Tech 4"}, {}], "ru": [{"STR_TEST1": "Тест Технология 1", "STR_TEST2": "Тест Технология 2", "STR_TEST3": "Тест Технология 3", "STR_TEST4": "Тест Технология 4"}, {}]};
+        let network, history = [], currentTID = "STR_TEST1";
+
+        const ui_lexicon = {
+            en: { 
+                title: "X-Piratez Viewer", 
+                depth: "Depth: ", 
+                hub: "Max List: ", 
+                rebuild: "REBUILD GRAPH", 
+                req: "Requires ALL (AND)", 
+                unl: "Unlocked by Any (OR)", 
+                back: "← BACK",
+                cost: "Cost",
+                points: "Research Points",
+                disables: "Disables"
+            },
+            ru: { 
+                title: "X-Piratez Навигатор", 
+                depth: "Глубина: ", 
+                hub: "Макс. список: ", 
+                rebuild: "ПЕРЕСТРОИТЬ ГРАФ", 
+                req: "Требует ВСЕ (AND)", 
+                unl: "Открывается через (OR)", 
+                back: "← НАЗАД",
+                cost: "Стоимость",
+                points: "Очки исследования",
+                disables: "Отключает"
+            }
+        };
+
+        function getTechLabel(id) {
+            const langData = gameLangs[document.getElementById('gameLang').value] || [{},{}];
+            return langData[0][id] || id;
+        }
+
+        function adj(id, v) {
+            const el = document.getElementById(id);
+            el.value = parseInt(el.value) + v;
+            el.dispatchEvent(new Event('input'));
+            updateUI();
+        }
+
+        function syncAndDraw() {
+            document.getElementById('search').value = getTechLabel(currentTID) + " (" + currentTID + ")";
+            updateUI();
+        }
+
+        function updateUI() {
+            const lex = ui_lexicon[document.getElementById('appLang').value];
+            document.getElementById('ui-main-title').innerText = lex.title;
+            document.getElementById('ui-label-depth').firstChild.textContent = lex.depth;
+            document.getElementById('ui-label-hub').firstChild.textContent = lex.hub;
+            document.getElementById('ui-btn-rebuild').innerText = lex.rebuild;
+            document.getElementById('backBtn').innerText = lex.back;
+            draw();
+        }
+
+        function goToTech(id, saveHistory = true) {
+            if(saveHistory && currentTID !== id) {
+                history.push(getTechLabel(currentTID) + " (" + currentTID + ")");
+                document.getElementById('backBtn').style.display = 'block';
+            }
+            currentTID = id;
+            syncAndDraw();
+        }
+
+        function goBack() {
+            if(!history.length) return;
+            const prev = history.pop();
+            const match = prev.match(/\((STR_[A-Z0-9_]+)\)/);
+            if(match) currentTID = match[1];
+            document.getElementById('search').value = prev;
+            if(!history.length) document.getElementById('backBtn').style.display = 'none';
+            updateUI();
+        }
+
+        function draw() {
+            const val = document.getElementById('search').value;
+            const match = val.match(/\((STR_[A-Z0-9_]+)\)/);
+            const tid = match ? match[1] : Object.keys(rawData).find(id => id === val || getTechLabel(id) === val) || currentTID;
+            
+            currentTID = tid;
+            const depth = parseInt(document.getElementById('depthRange').value);
+            const hubLimit = parseInt(document.getElementById('hubRange').value);
+            const nodes = [], edges = [], queue = [[tid, 0]], seen = new Set();
+
+            while(queue.length > 0) {
+                const [id, step] = queue.shift();
+                if(seen.has(id)) continue;
+                seen.add(id);
+
+                nodes.push({ id: id, label: getTechLabel(id), shape: 'box', color: (id===tid?'#dc3545':'#fff'), font: {color:(id===tid?'#fff':'#000'), size:14} });
+                
+                if(step < depth && rawData[id]) {
+                    const ds = rawData[id].deps;
+                    const unlockers = [];
+                    for(let k in rawData) if(rawData[k].unlocks.includes(id)) unlockers.push(k);
+
+                    if (unlockers.length > 0) {
+                        if(unlockers.length < hubLimit) unlockers.forEach(s => {
+                            edges.push({from:s, to:id, color: '#6f42c1'});
+                            queue.push([s, step+1]);
+                        });
+                    } else {
+                        if(ds.length < hubLimit) ds.forEach(d => { 
+                            edges.push({from:d, to:id, color: '#007bff'}); 
+                            queue.push([d, step+1]); 
+                        });
+                    }
+                }
+            }
+            if(network) network.destroy();
+            network = new vis.Network(document.getElementById('mynetwork'), {nodes, edges}, {
+                layout: { hierarchical: { direction:'DU', nodeSpacing: 350, levelSeparation: 200, sortMethod:'directed' } },
+                physics: false,
+                edges: { arrows:'to', smooth: { type:'cubicBezier', forceDirection:'vertical', roundness:0.4 } }
+            });
+            network.on("click", p => p.nodes[0] && showDetail(p.nodes[0]));
+            network.on("doubleClick", p => p.nodes[0] && goToTech(p.nodes[0]));
+            showDetail(tid);
+        }
+
+        function showDetail(id) {
+            if(!rawData[id]) return;
+            const lang = gameLangs[document.getElementById('gameLang').value] || [{},{}];
+            const lex = ui_lexicon[document.getElementById('appLang').value];
+            
+            let h = "<h4>"+getTechLabel(id)+"</h4><p style='font-size:0.8em;color:#666'>"+id+"</p>";
+            
+            // Display cost and points statistics
+            const techData = rawData[id];
+            h += "<div class='card-stats'>";
+            h += "<div class='stat-item'><span class='stat-label'>"+lex.cost+"</span><span class='stat-value cost'>"+techData.cost+"</span></div>";
+            h += "<div class='stat-item'><span class='stat-label'>"+lex.points+"</span><span class='stat-value points'>"+techData.points+"</span></div>";
+            h += "</div>";
+            
+            if(lang[1][id]) h += "<div class='ufo-desc'>"+lang[1][id]+"</div>";
+            
+            const unlockers = [];
+            for(let key in rawData) if(rawData[key].unlocks.includes(id)) unlockers.push(key);
+            
+            const fmt = (list) => list.map(x => "<span class='tech-link' onclick='goToTech(""+x+"")'>"+getTechLabel(x)+"</span>").join('');
+            
+            if(unlockers.length > 0) {
+                h += "<div class='card'><b class='or-label'>"+lex.unl+" ("+unlockers.length+"):</b>"+fmt(unlockers)+"</div>";
+            } else {
+                const deps = rawData[id].deps;
+                if(deps && deps.length > 0) {
+                    h += "<div class='card'><b class='and-label'>"+lex.req+" ("+deps.length+"):</b>"+fmt(deps)+"</div>";
+                }
+            }
+            
+            // Display disables if present
+            const disables = rawData[id].disables;
+            if(disables && disables.length > 0) {
+                h += "<div class='card'><b class='or-label' style='color:#dc3545;'>"+lex.disables+" ("+disables.length+"):</b>"+fmt(disables)+"</div>";
+            }
+            
+            document.getElementById('info').innerHTML = h;
+        }
+
+        const sInput = document.getElementById('search'), sDiv = document.getElementById('suggestions');
+        sInput.oninput = () => {
+            const v = sInput.value.toLowerCase();
+            if(v.length < 2) { sDiv.style.display='none'; return; }
+            const matches = Object.keys(rawData).filter(id => id.toLowerCase().includes(v) || getTechLabel(id).toLowerCase().includes(v)).slice(0,10);
+            sDiv.innerHTML = matches.map(m => "<div class='suggest-item' onclick='goToTech(\""+m+"\"); sDiv.style.display=\"none\";'>"+getTechLabel(m)+" ("+m+")</div>").join('');
+            sDiv.style.display='block';
+        };
+
+        window.onload = syncAndDraw;
+    </script>
+</body>
+</html>
