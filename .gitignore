@@ -1,5 +1,1 @@
-(html_generator.py and test_viewer.html are source files, no build artifacts, dependencies, or temp files detected in changes)
-
-```python
-
-```
+Nothing needs to be added to .gitignore since only a source file (test_viewer.html) was modified and there are no build artifacts, dependencies, or temporary files in the changes.
