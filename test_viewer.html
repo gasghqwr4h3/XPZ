@@ -57,9 +57,9 @@
     <div id="mynetwork"></div>
 
     <script>
-        const rawData = {"STR_TEST1": {"deps": ["STR_TEST2"], "unlocks": ["STR_TEST3"], "disables": [], "cost": 50, "points": 200}, "STR_TEST2": {"deps": [], "unlocks": ["STR_TEST1"], "disables": [], "cost": 25, "points": -100}, "STR_TEST3": {"deps": ["STR_TEST1"], "unlocks": [], "disables": ["STR_TEST4"], "cost": 75, "points": 500}, "STR_TEST4": {"deps": [], "unlocks": [], "disables": [], "cost": 10, "points": 50}};
-        const gameLangs = {"en-US": [{"STR_TEST1": "Test Tech 1", "STR_TEST2": "Test Tech 2", "STR_TEST3": "Test Tech 3", "STR_TEST4": "Test Tech 4"}, {}], "ru": [{"STR_TEST1": "Тест Технология 1", "STR_TEST2": "Тест Технология 2", "STR_TEST3": "Тест Технология 3", "STR_TEST4": "Тест Технология 4"}, {}]};
-        let network, history = [], currentTID = "STR_TEST1";
+        const rawData = {"STR_SCHOOLING_2": {"deps": ["STR_SCHOOLING_1"], "unlocks": ["STR_BASIC_LASER"]}, "STR_SCHOOLING_1": {"deps": [], "unlocks": ["STR_SCHOOLING_2"]}, "STR_BASIC_LASER": {"deps": ["STR_SCHOOLING_2"], "unlocks": ["STR_ADVANCED_LASER"]}, "STR_ADVANCED_LASER": {"deps": ["STR_BASIC_LASER"], "unlocks": []}};
+        const gameLangs = {"en-US": [{"STR_SCHOOLING_2": "Advanced Schooling", "STR_SCHOOLING_1": "Basic Schooling", "STR_BASIC_LASER": "Basic Laser", "STR_ADVANCED_LASER": "Advanced Laser"}, {"STR_SCHOOLING_2": "Learn advanced skills.", "STR_SCHOOLING_1": "Learn basic skills."}], "ru": [{"STR_SCHOOLING_2": "Продвинутое обучение", "STR_SCHOOLING_1": "Базовое обучение", "STR_BASIC_LASER": "Базовый лазер", "STR_ADVANCED_LASER": "Продвинутый лазер"}, {"STR_SCHOOLING_2": "Изучите продвинутые навыки.", "STR_SCHOOLING_1": "Изучите базовые навыки."}]};
+        let network, history = [], currentTID = "STR_SCHOOLING_2";
 
         const ui_lexicon = {
             en: { 
@@ -137,7 +137,24 @@
         function draw() {
             const val = document.getElementById('search').value;
             const match = val.match(/\((STR_[A-Z0-9_]+)\)/);
-            const tid = match ? match[1] : Object.keys(rawData).find(id => id === val || getTechLabel(id) === val) || currentTID;
+            let tid = currentTID;
+            
+            // Determine tech ID from search input or fallback to current
+            if (match) {
+                tid = match[1];
+            } else {
+                const found = Object.keys(rawData).find(id => 
+                    id === val || getTechLabel(id) === val
+                );
+                if (found) tid = found;
+            }
+            
+            // Fallback if tech not found in data
+            if (!rawData[tid]) {
+                console.warn("Tech not found:", tid, "falling back to start");
+                tid = "STR_SCHOOLING_2"; // Will be replaced by Python
+                if (!rawData[tid]) tid = Object.keys(rawData)[0];
+            }
             
             currentTID = tid;
             const depth = parseInt(document.getElementById('depthRange').value);
@@ -149,22 +166,36 @@
                 if(seen.has(id)) continue;
                 seen.add(id);
 
-                nodes.push({ id: id, label: getTechLabel(id), shape: 'box', color: (id===tid?'#dc3545':'#fff'), font: {color:(id===tid?'#fff':'#000'), size:14} });
+                const isRoot = (id === tid);
+                nodes.push({ 
+                    id: id, 
+                    label: getTechLabel(id), 
+                    shape: 'box', 
+                    color: isRoot ? '#dc3545' : '#fff', 
+                    font: {color: isRoot ? '#fff' : '#000', size: 14},
+                    borderWidth: isRoot ? 3 : 1
+                });
                 
                 if(step < depth && rawData[id]) {
-                    const ds = rawData[id].deps;
+                    const ds = rawData[id].deps || [];
+                    
+                    // Find who unlocks this tech (OR logic) - SAFE CHECK
                     const unlockers = [];
-                    for(let k in rawData) if(rawData[k].unlocks.includes(id)) unlockers.push(k);
+                    for(let k in rawData) {
+                        if(rawData[k].unlocks && rawData[k].unlocks.includes(id)) {
+                            unlockers.push(k);
+                        }
+                    }
 
                     if (unlockers.length > 0) {
                         if(unlockers.length < hubLimit) unlockers.forEach(s => {
-                            edges.push({from:s, to:id, color: '#6f42c1'});
-                            queue.push([s, step+1]);
+                            edges.push({from:s, to:id, color: '#6f42c1', arrows: 'to'});
+                            if(!seen.has(s)) queue.push([s, step+1]);
                         });
                     } else {
                         if(ds.length < hubLimit) ds.forEach(d => { 
-                            edges.push({from:d, to:id, color: '#007bff'}); 
-                            queue.push([d, step+1]); 
+                            edges.push({from:d, to:id, color: '#007bff', arrows: 'to'}); 
+                            if(!seen.has(d)) queue.push([d, step+1]); 
                         });
                     }
                 }
@@ -173,7 +204,8 @@
             network = new vis.Network(document.getElementById('mynetwork'), {nodes, edges}, {
                 layout: { hierarchical: { direction:'DU', nodeSpacing: 350, levelSeparation: 200, sortMethod:'directed' } },
                 physics: false,
-                edges: { arrows:'to', smooth: { type:'cubicBezier', forceDirection:'vertical', roundness:0.4 } }
+                edges: { arrows:'to', smooth: { type:'cubicBezier', forceDirection:'vertical', roundness:0.4 } },
+                interaction: { hover: true }
             });
             network.on("click", p => p.nodes[0] && showDetail(p.nodes[0]));
             network.on("doubleClick", p => p.nodes[0] && goToTech(p.nodes[0]));
