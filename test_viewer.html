@@ -57,9 +57,9 @@
     <div id="mynetwork"></div>
 
     <script>
-        const rawData = {"STR_SCHOOLING_2": {"deps": ["STR_SCHOOLING_1"], "unlocks": ["STR_BASIC_LASER"]}, "STR_SCHOOLING_1": {"deps": [], "unlocks": ["STR_SCHOOLING_2"]}, "STR_BASIC_LASER": {"deps": ["STR_SCHOOLING_2"], "unlocks": ["STR_ADVANCED_LASER"]}, "STR_ADVANCED_LASER": {"deps": ["STR_BASIC_LASER"], "unlocks": []}};
-        const gameLangs = {"en-US": [{"STR_SCHOOLING_2": "Advanced Schooling", "STR_SCHOOLING_1": "Basic Schooling", "STR_BASIC_LASER": "Basic Laser", "STR_ADVANCED_LASER": "Advanced Laser"}, {"STR_SCHOOLING_2": "Learn advanced skills.", "STR_SCHOOLING_1": "Learn basic skills."}], "ru": [{"STR_SCHOOLING_2": "Продвинутое обучение", "STR_SCHOOLING_1": "Базовое обучение", "STR_BASIC_LASER": "Базовый лазер", "STR_ADVANCED_LASER": "Продвинутый лазер"}, {"STR_SCHOOLING_2": "Изучите продвинутые навыки.", "STR_SCHOOLING_1": "Изучите базовые навыки."}]};
-        let network, history = [], currentTID = "STR_SCHOOLING_2";
+        const rawData = {"STR_TEST1": {"deps": ["STR_TEST2"], "unlocks": ["STR_TEST3"], "disables": [], "cost": 50, "points": 200}, "STR_TEST2": {"deps": [], "unlocks": ["STR_TEST1"], "disables": [], "cost": 25, "points": -100}, "STR_TEST3": {"deps": ["STR_TEST1"], "unlocks": [], "disables": ["STR_TEST4"], "cost": 75, "points": 500}, "STR_TEST4": {"deps": [], "unlocks": [], "disables": [], "cost": 10, "points": 50}};
+        const gameLangs = {"en-US": [{"STR_TEST1": "Test Tech 1", "STR_TEST2": "Test Tech 2", "STR_TEST3": "Test Tech 3", "STR_TEST4": "Test Tech 4"}, {}], "ru": [{"STR_TEST1": "Тест Технология 1", "STR_TEST2": "Тест Технология 2", "STR_TEST3": "Тест Технология 3", "STR_TEST4": "Тест Технология 4"}, {}]};
+        let network, history = [], currentTID = "STR_TEST1";
 
         const ui_lexicon = {
             en: { 
@@ -152,7 +152,7 @@
             // Fallback if tech not found in data
             if (!rawData[tid]) {
                 console.warn("Tech not found:", tid, "falling back to start");
-                tid = "STR_SCHOOLING_2"; // Will be replaced by Python
+                tid = "STR_TEST1"; // Will be replaced by Python
                 if (!rawData[tid]) tid = Object.keys(rawData)[0];
             }
             
